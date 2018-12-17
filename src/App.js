@@ -1,54 +1,88 @@
-import React, { Component } from 'react';
-import logo from './logo.svg';
-import './App.css';
-import Auth from '@aws-amplify/auth';
-import Analytics from '@aws-amplify/analytics';
-
-import awsconfig from './aws-exports';
-
-// retrieve temporary AWS credentials and sign requests
-Auth.configure(awsconfig);
-// send analytics events to Amazon Pinpoint
-Analytics.configure(awsconfig);
+import React, { Component, Fragment } from "react";
+import { Auth } from "aws-amplify";
+import { Link, withRouter } from "react-router-dom";
+import { Nav, Navbar, NavItem } from "react-bootstrap";
+import { LinkContainer } from "react-router-bootstrap";
+import Routes from "./Routes";
+import "./App.css";
 
 class App extends Component {
   constructor(props) {
     super(props);
-    this.handleAnalyticsClick = this.handleAnalyticsClick.bind(this);
-    this.state = {analyticsEventSent: false, resultHtml: "", eventsSent: 0};
+
+    this.state = {
+      isAuthenticated: false,
+      isAuthenticating: true
+    };
   }
 
-  handleAnalyticsClick() {
-      Analytics.record('AWS Amplify Tutorial Event')
-        .then( (evt) => {
-            const url = 'https://console.aws.amazon.com/pinpoint/home/?region=us-east-1#/apps/'+awsconfig.aws_mobile_analytics_app_id+'/analytics/events';
-            let result = (<div>
-              <p>Event Submitted.</p>
-              <p>Events sent: {++this.state.eventsSent}</p>
-              <a href={url} target="_blank">View Events on the Amazon Pinpoint Console</a>
-            </div>);
-            this.setState({
-                'analyticsEventSent': true,
-                'resultHtml': result
-            });
-        });
+  async componentDidMount() {
+    try {
+      await Auth.currentSession();
+      this.userHasAuthenticated(true);
+    }
+    catch(e) {
+      if (e !== 'No current user') {
+        alert(e);
+      }
+    }
+
+    this.setState({ isAuthenticating: false });
+  }
+
+  userHasAuthenticated = authenticated => {
+    this.setState({ isAuthenticated: authenticated });
+  }
+
+  handleLogout = async event => {
+    await Auth.signOut();
+
+    this.userHasAuthenticated(false);
+
+    this.props.history.push("/login");
   }
 
   render() {
+    const childProps = {
+      isAuthenticated: this.state.isAuthenticated,
+      userHasAuthenticated: this.userHasAuthenticated
+    };
+
     return (
-      <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h1 className="App-title">Welcome to React</h1>
-        </header>
-        <div className="App-intro">
-          <button className="App-button" onClick={this.handleAnalyticsClick}>Generate Analytics Event</button>
-          {this.state.analyticsEventSent}
-          <div>{this.state.resultHtml}</div>
-        </div>
+      !this.state.isAuthenticating &&
+      <div className="App container">
+        <Navbar fluid collapseOnSelect>
+          <Navbar.Header>
+            <Navbar.Brand>
+              <Link to="/">Scratch</Link>
+            </Navbar.Brand>
+            <Navbar.Toggle />
+          </Navbar.Header>
+          <Navbar.Collapse>
+            <Nav pullRight>
+              {this.state.isAuthenticated
+                ? <Fragment>
+                    <LinkContainer to="/settings">
+                      <NavItem>Settings</NavItem>
+                    </LinkContainer>
+                    <NavItem onClick={this.handleLogout}>Logout</NavItem>
+                  </Fragment>
+                : <Fragment>
+                    <LinkContainer to="/signup">
+                      <NavItem>Signup</NavItem>
+                    </LinkContainer>
+                    <LinkContainer to="/login">
+                      <NavItem>Login</NavItem>
+                    </LinkContainer>
+                  </Fragment>
+              }
+            </Nav>
+          </Navbar.Collapse>
+        </Navbar>
+        <Routes childProps={childProps} />
       </div>
     );
   }
 }
 
-export default App;
+export default withRouter(App);
